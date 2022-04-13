@@ -35,6 +35,7 @@ class DQN(Base_Agent):
             self.save_experience()
             self.state = self.next_state #this is to set the state for the next iteration
             self.global_step_number += 1
+            self.environment.render()
         self.episode_number += 1
 
     def pick_action(self, state=None):

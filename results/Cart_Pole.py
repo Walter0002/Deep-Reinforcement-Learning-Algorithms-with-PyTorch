@@ -21,8 +21,8 @@ config = Config()
 config.seed = 1
 config.environment = gym.make("CartPole-v0")
 config.num_episodes_to_run = 450
-config.file_to_save_data_results = "results/data_and_graphs/Cart_Pole_Results_Data.pkl"
-config.file_to_save_results_graph = "results/data_and_graphs/Cart_Pole_Results_Graph.png"
+config.file_to_save_data_results = "data_and_graphs/Cart_Pole_Results_Data.pkl"
+config.file_to_save_results_graph = "data_and_graphs/Cart_Pole_Results_Graph.png"
 config.show_solution_score = False
 config.visualise_individual_results = False
 config.visualise_overall_agent_results = True
@@ -137,6 +137,7 @@ config.hyperparameters = {
 if __name__ == "__main__":
     AGENTS = [SAC_Discrete, DDQN, Dueling_DDQN, DQN, DQN_With_Fixed_Q_Targets,
               DDQN_With_Prioritised_Experience_Replay, A2C, PPO, A3C ]
+    AGENTS = [DQN]
     trainer = Trainer(config, AGENTS)
     trainer.run_games_for_agents()
 

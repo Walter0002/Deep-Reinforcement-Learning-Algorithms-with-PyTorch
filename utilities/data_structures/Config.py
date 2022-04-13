@@ -8,7 +8,7 @@ class Config(object):
         self.file_to_save_data_results = None
         self.file_to_save_results_graph = None
         self.runs_per_agent = None
-        self.visualise_overall_results = None
+        self.visualise_overall_results = True
         self.visualise_individual_results = None
         self.hyperparameters = None
         self.use_GPU = None
