@@ -18,5 +18,6 @@ class Config(object):
         self.randomise_random_seed = True
         self.show_solution_score = False
         self.debug_mode = False
+        self.eval_mode = False
 
 

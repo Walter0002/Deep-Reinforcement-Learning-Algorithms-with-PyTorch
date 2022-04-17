@@ -45,7 +45,13 @@ class Base_Agent(object):
         gym.logger.set_level(40)  # stops it from printing an unnecessary warning
         self.log_game_info()
 
+        self.model_path = "Models/{}_{}_local_network.pt".format(self.agent_name, self.environment_title)
+
     def step(self):
+        """Takes a step in the game. This method must be overriden by any agent"""
+        raise ValueError("Step needs to be implemented by the agent")
+
+    def eval_step(self):
         """Takes a step in the game. This method must be overriden by any agent"""
         raise ValueError("Step needs to be implemented by the agent")
 
@@ -180,6 +186,14 @@ class Base_Agent(object):
         self.episode_next_states.append(self.next_state)
         self.episode_dones.append(self.done)
 
+    def eval_one_episode(self, save_and_print_results=True):
+        start = time.time()
+        self.reset_game()
+        self.eval_step()
+        if save_and_print_results: self.save_and_print_result()
+        time_taken = time.time() - start
+        return self.game_full_episode_scores, self.rolling_results, time_taken
+
     def run_n_episodes(self, num_episodes=None, show_whether_achieved_goal=True, save_and_print_results=True):
         """Runs game to completion n times and then summarises results and saves model (if asked to)"""
         if num_episodes is None: num_episodes = self.config.num_episodes_to_run
@@ -188,6 +202,7 @@ class Base_Agent(object):
             self.reset_game()
             self.step()
             if save_and_print_results: self.save_and_print_result()
+            if self.episode_number%10 ==9 and self.config.save_model: self.locally_save_policy()
         time_taken = time.time() - start
         if show_whether_achieved_goal: self.show_whether_achieved_goal()
         if self.config.save_model: self.locally_save_policy()
@@ -222,9 +237,15 @@ class Base_Agent(object):
 
     def print_rolling_result(self):
         """Prints out the latest episode results"""
-        text = """"\r Episode {0}, Score: {3: .2f}, Max score seen: {4: .2f}, Rolling score: {1: .2f}, Max rolling score seen: {2: .2f}"""
+        # text = """"\r Episode {0}, Score: {3: .2f}, Max score seen: {4: .2f}, Rolling score: {1: .2f}, Max rolling score seen: {2: .2f}"""
+        # sys.stdout.write(
+        #     text.format(len(self.game_full_episode_scores), self.rolling_results[-1], self.max_rolling_score_seen,
+        #                 self.game_full_episode_scores[-1], self.max_episode_score_seen))
+        text = """"Episode {0}, nStep: {5}, use_radio: {6: .2f}, Score: {3: .2f}, Max score seen: {4: .2f}, Rolling score: {1: .2f}, Max rolling score seen: {2: .2f}"""
+        text += '\n'
         sys.stdout.write(text.format(len(self.game_full_episode_scores), self.rolling_results[-1], self.max_rolling_score_seen,
-                                     self.game_full_episode_scores[-1], self.max_episode_score_seen))
+                                     self.game_full_episode_scores[-1], self.max_episode_score_seen,
+                                     self.config.environment.step_count, self.config.environment.use_radio))
         sys.stdout.flush()
 
     def show_whether_achieved_goal(self):

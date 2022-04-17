@@ -18,6 +18,8 @@ class Trainer(object):
         self.colors = ["red", "blue", "green", "orange", "yellow", "purple"]
         self.colour_ix = 0
 
+        # self.environment_name = self.config.environment.environment_name
+
     def create_agent_to_agent_group_dictionary(self):
         """Creates a dictionary that maps an agent to their wider agent group"""
         agent_to_agent_group_dictionary = {
@@ -83,13 +85,15 @@ class Trainer(object):
         if self.config.file_to_save_data_results: self.save_obj(self.results, self.config.file_to_save_data_results)
         if self.config.file_to_save_results_graph: plt.savefig(self.config.file_to_save_results_graph, bbox_inches="tight")
         plt.show()
+        self.config.environment.close()
         return self.results
 
     def create_object_to_store_results(self):
         """Creates a dictionary that we will store the results in if it doesn't exist, otherwise it loads it up"""
         if self.config.overwrite_existing_results_file or not self.config.file_to_save_data_results or not os.path.isfile(self.config.file_to_save_data_results):
             results = {}
-        else: results = self.load_obj(self.config.file_to_save_data_results)
+        else:
+            results = self.load_obj(self.config.file_to_save_data_results)
         return results
 
     def run_games_for_agent(self, agent_number, agent_class):
@@ -99,7 +103,8 @@ class Trainer(object):
         agent_group = self.agent_to_agent_group[agent_name]
         agent_round = 1
         for run in range(self.config.runs_per_agent):
-            agent_config = copy.deepcopy(self.config)
+            # agent_config = copy.deepcopy(self.config)
+            agent_config = self.config
 
             if self.environment_has_changeable_goals(agent_config.environment) and self.agent_cant_handle_changeable_goals_without_flattening(agent_name):
                 print("Flattening changeable-goal environment for agent {}".format(agent_name))
@@ -114,7 +119,11 @@ class Trainer(object):
             self.environment_name = agent.environment_title
             print(agent.hyperparameters)
             print("RANDOM SEED " , agent_config.seed)
-            game_scores, rolling_scores, time_taken = agent.run_n_episodes()
+            if self.config.eval_mode:
+                game_scores, rolling_scores, time_taken = agent.eval_one_episode()
+            else:
+                print('Train start')
+                game_scores, rolling_scores, time_taken = agent.run_n_episodes()
             print("Time taken: {}".format(time_taken), flush=True)
             self.print_two_empty_lines()
             agent_results.append([game_scores, rolling_scores, len(rolling_scores), -1 * max(rolling_scores), time_taken])

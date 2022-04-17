@@ -1,3 +1,4 @@
+import os
 from collections import Counter
 
 import torch
@@ -16,6 +17,7 @@ class DQN(Base_Agent):
         Base_Agent.__init__(self, config)
         self.memory = Replay_Buffer(self.hyperparameters["buffer_size"], self.hyperparameters["batch_size"], config.seed, self.device)
         self.q_network_local = self.create_NN(input_dim=self.state_size, output_dim=self.action_size)
+        self.locally_load_policy()
         self.q_network_optimizer = optim.Adam(self.q_network_local.parameters(),
                                               lr=self.hyperparameters["learning_rate"], eps=1e-4)
         self.exploration_strategy = Epsilon_Greedy_Exploration(config)
@@ -23,6 +25,13 @@ class DQN(Base_Agent):
     def reset_game(self):
         super(DQN, self).reset_game()
         self.update_learning_rate(self.hyperparameters["learning_rate"], self.q_network_optimizer)
+
+    def eval_step(self):
+        while not self.done:
+            self.action = self.eval_pick_action()
+            self.conduct_action(self.action)
+            self.state = self.next_state
+            self.global_step_number += 1
 
     def step(self):
         """Runs a step within a game including a learning step if required"""
@@ -52,6 +61,23 @@ class DQN(Base_Agent):
         action = self.exploration_strategy.perturb_action_for_exploration_purposes({"action_values": action_values,
                                                                                     "turn_off_exploration": self.turn_off_exploration,
                                                                                     "episode_number": self.episode_number})
+        self.logger.info("Q values {} -- Action chosen {}".format(action_values, action))
+        return action
+
+    def eval_pick_action(self, state=None):
+        """Uses the local Q network and an epsilon greedy policy to pick an action"""
+        # PyTorch only accepts mini-batches and not single observations so we have to use unsqueeze to add
+        # a "fake" dimension to make it a mini-batch rather than a single observation
+        if state is None: state = self.state
+        if isinstance(state, np.int64) or isinstance(state, int): state = np.array([state])
+        state = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
+        if len(state.shape) < 2: state = state.unsqueeze(0)
+        self.q_network_local.eval() #puts network in evaluation mode
+        with torch.no_grad():
+            action_values = self.q_network_local(state)
+        action = self.exploration_strategy.perturb_action_for_exploration_purposes({"action_values": action_values,
+                                                                                    "turn_off_exploration": True,
+                                                                                    "episode_number": 0})
         self.logger.info("Q values {} -- Action chosen {}".format(action_values, action))
         return action
 
@@ -97,7 +123,16 @@ class DQN(Base_Agent):
 
     def locally_save_policy(self):
         """Saves the policy"""
-        torch.save(self.q_network_local.state_dict(), "Models/{}_local_network.pt".format(self.agent_name))
+        model_dir = os.path.dirname(self.model_path)
+        if not os.path.exists(model_dir):
+            os.mkdir(model_dir)
+        torch.save(self.q_network_local.state_dict(), self.model_path)
+
+    def locally_load_policy(self):
+        """Loads the policy"""
+        if os.path.exists(self.model_path):
+            print('load model')
+            self.q_network_local.load_state_dict(torch.load(self.model_path))
 
     def time_for_q_network_to_learn(self):
         """Returns boolean indicating whether enough steps have been taken for learning to begin and there are
