@@ -35,6 +35,8 @@ class Epsilon_Greedy_Exploration(Base_Exploration_Strategy):
 
         if (random.random() > epsilon or turn_off_exploration) and (episode_number >= self.random_episodes_to_run):
             return torch.argmax(action_values).item()
+        if 'n_action' in action_info:
+            return np.random.randint(0, action_info['n_action'])
         return  np.random.randint(0, action_values.shape[1])
 
     def get_updated_epsilon_exploration(self, action_info, epsilon=1.0):

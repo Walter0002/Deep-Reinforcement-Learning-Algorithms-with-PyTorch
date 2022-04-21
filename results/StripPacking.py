@@ -38,11 +38,11 @@ config.eval_mode = False
 
 config.hyperparameters = {
     "DQN_Agents": {
-        "learning_rate": 0.01,
+        "learning_rate": 0.001,
         "batch_size": 256,
         "buffer_size": 40000,
         "epsilon": 1.0,
-        "epsilon_decay_rate_denominator": 1,
+        "epsilon_decay_rate_denominator": 100,  # 越大探索的越多
         "discount_rate": 0.99,
         "tau": 0.01,
         "alpha_prioritised_replay": 0.6,
@@ -139,7 +139,7 @@ config.hyperparameters = {
 if __name__ == "__main__":
     AGENTS = [SAC_Discrete, DDQN, Dueling_DDQN, DQN, DQN_With_Fixed_Q_Targets,
               DDQN_With_Prioritised_Experience_Replay, A2C, PPO, A3C ]
-    AGENTS = [DDQN]
+    AGENTS = [Dueling_DDQN]
     trainer = Trainer(config, AGENTS)
     trainer.run_games_for_agents()
 

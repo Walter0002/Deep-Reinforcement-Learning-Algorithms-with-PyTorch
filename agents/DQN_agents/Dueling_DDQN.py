@@ -8,8 +8,11 @@ class Dueling_DDQN(DDQN):
     agent_name = "Dueling DDQN"
 
     def __init__(self, config):
+        self.q_network_local = None
+        self.q_network_target = None
         DDQN.__init__(self, config)
         self.q_network_local = self.create_NN(input_dim=self.state_size, output_dim=self.action_size + 1)
+        self.locally_load_policy()
         self.q_network_optimizer = optim.Adam(self.q_network_local.parameters(), lr=self.hyperparameters["learning_rate"], eps=1e-4)
         self.q_network_target = self.create_NN(input_dim=self.state_size, output_dim=self.action_size + 1)
         Base_Agent.copy_model_over(from_model=self.q_network_local, to_model=self.q_network_target)
@@ -25,10 +28,30 @@ class Dueling_DDQN(DDQN):
         with torch.no_grad():
             action_values = self.q_network_local(state)
             action_values = action_values[:, :-1] #because we treat the last output element as state-value and rest as advantages
+            n_action = self.config.environment.get_curr_action_size() if hasattr(self.config.environment, 'get_curr_action_size') else action_values.shape(1)
+            # action_values = action_values[:, :n_action] # reset n-action
         self.q_network_local.train()
-        action = self.exploration_strategy.perturb_action_for_exploration_purposes({"action_values": action_values,
+        action = self.exploration_strategy.perturb_action_for_exploration_purposes({"action_values": action_values, 'n_action':n_action,
                                                                                     "turn_off_exploration": self.turn_off_exploration,
                                                                                     "episode_number": self.episode_number})
+        return action
+
+    def eval_pick_action(self, state=None):
+        """Uses the local Q network and an epsilon greedy policy to pick an action"""
+        # PyTorch only accepts mini-batches and not single observations so we have to use unsqueeze to add
+        # a "fake" dimension to make it a mini-batch rather than a single observation
+        if state is None: state = self.state
+        state = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
+        if len(state.shape) < 2: state = state.unsqueeze(0)
+        q_network = self.q_network_target
+        q_network.eval()
+        with torch.no_grad():
+            action_values = q_network(state)
+            action_values = action_values[:, :-1] #because we treat the last output element as state-value and rest as advantages
+            n_action = self.config.environment.get_curr_action_size() if hasattr(self.config.environment, 'get_curr_action_size') else action_values.shape(1)
+            print('action_values', action_values, n_action)
+            action_values = action_values[:, :n_action] # reset n-action
+        action = torch.argmax(action_values).item()
         return action
 
     def compute_q_values_for_next_states(self, next_states):
@@ -55,10 +78,3 @@ class Dueling_DDQN(DDQN):
         q_values = self.calculate_duelling_q_values(duelling_network_output)
         Q_expected = q_values.gather(1, actions.long())
         return Q_expected
-
-
-
-
-
-
-

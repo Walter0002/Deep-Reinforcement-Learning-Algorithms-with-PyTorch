@@ -142,8 +142,8 @@ class RectPackingEnv(gym.Env):
             assert False
         assert self.data
         self.allow_rotate = allow_rotate
-        self.reward_threshold = 100
-        self.reward_for_achieving_goal = 100
+        self.reward_threshold = 10
+        self.reward_factor_for_achieving_goal = 10
         self.step_reward_for_invalid_action = -10
         self.step_reward_for_not_exist_action = -100
         self.embeding_size = 30   # t
@@ -159,7 +159,6 @@ class RectPackingEnv(gym.Env):
         self.action_space = spaces.Discrete(self.embeding_size)
 
         self.seed()
-        self.reward_threshold = 0.0
         self.trials = 100
         self.max_episode_steps = 1000
         # self.max_episode_steps = self.reward_for_achieving_goal
@@ -253,26 +252,36 @@ class RectPackingEnv(gym.Env):
             return -1
         return 0
 
+    def get_curr_action_size(self):
+        return min(len(self.remain_pieces), self.embeding_size)
 
     def get_state_array(self):
         # 默认最大支持100个skyline，100个piece
-        # sa = np.array([[sl.x, sl.y, sl.w, 0, 0] for sl in self.skylines])
-        # pa = np.array([[pi.width(), pi.height()] for pi in self.remain_pieces])
-        # sa = np.resize(sa, (100, 5))
-        # pa = np.resize(pa, (100, 2))
-        # return np.concatenate((sa, pa), axis=1)
-        sa = np.array([[sl.x, sl.y, sl.w, self.get_skyline_lh(i), self.get_skyline_rh(i)] for i,sl in enumerate(self.skylines)])
-        indexs = list(range(len(self.remain_pieces)))
-        # random.shuffle(indexs)
-        pa = np.array([[self.remain_pieces[i].width(), self.remain_pieces[i].height()] for i in indexs])
-        sa = np.resize(sa, (self.embeding_size, 5))
-        pa = np.resize(pa, (self.embeding_size, 2))
-        state = np.concatenate((sa, pa), axis=1)
-        # state /= state.max()
-        return np.resize(state, (self.embeding_size * 7))
+        sa = np.array([[sl.x, sl.y, sl.w] for sl in self.skylines])
+        pa = np.array([[pi.width(), pi.height()] for pi in self.remain_pieces])
+        # Note that this behavior
+        #     is different from a.resize(new_shape) which fills with zeros instead
+        #     of repeated copies of `a`.
+        sa.resize((self.embeding_size, 3), refcheck=False)
+        pa.resize((self.embeding_size, 2), refcheck=False)
+        return np.resize(np.concatenate((sa, pa), axis=1), self.embeding_size * 5)
+        # sa = np.array([[sl.x, sl.y, sl.w, self.get_skyline_lh(i), self.get_skyline_rh(i)] for i,sl in enumerate(self.skylines)])
+        # indexs = list(range(len(self.remain_pieces)))
+        # # random.shuffle(indexs)
+        # pa = np.array([[self.remain_pieces[i].width(), self.remain_pieces[i].height()] for i in indexs])
+        # sa.resize((self.embeding_size, 5), refcheck=False)
+        # pa.resize((self.embeding_size, 2), refcheck=False)
+        # state = np.concatenate((sa, pa), axis=1)
+        # # state /= state.max()
+        # return np.resize(state, (self.embeding_size * 7))
 
     def render(self, mode='human', close=False):
-        if not self.viewer: self.viewer = rendering.Viewer(1000, 800)
+        if not self.viewer:
+            screanW = 1000; sreanH = 800
+            self.viewer = rendering.Viewer(screanW, sreanH)
+            line1 = rendering.Line((self.strip_width, 0), (self.strip_width, sreanH))
+            line1.set_color(0, 0, 0)
+            self.viewer.add_geom(line1)
         # render skyline
         for sl in self.skylines:
             line1 = rendering.Line((sl.x, sl.y), (sl.x+sl.w, sl.y))
@@ -338,8 +347,8 @@ class RectPackingEnv(gym.Env):
         action = self.array_to_action(desired_action)
 
         self.step_count += 1
-        self.reward = 1 + len(self.skylines)
-        # state_next = copy.copy(state)
+        # self.reward = 1 + len(self.skylines)
+        self.reward = 0
         self.done = False
         #  寻找最佳放置的 piece 的 skyline，也就是最低最左的那个
         skyline_index = 0
@@ -352,18 +361,19 @@ class RectPackingEnv(gym.Env):
             piece = self.remain_pieces[action.piece_index]
             iw = piece.width_afterRotate() if action.rotate else piece.width()
             ih = piece.height_afterRotate() if action.rotate else piece.height()
-            if (sl.w < iw + 0.001):
+            if (sl.w < iw - 0.001):
                 # self.reward = self.step_reward_for_invalid_action
                 # self.action_invalid_count += 1
                 # if self.action_invalid_count > 2:
                 #     self.UpdateSkylines(skyline_index)
-                if len(self.skylines) > 1 :
+                if len(self.skylines) > 1:
                     self.UpdateSkylines(skyline_index)
-                self.action_invalid_count += 1
-                if self.action_invalid_count > 2:
-                    self.reward = self.step_reward_for_invalid_action
-                else:
-                    self.reward = 0
+                # 或许这里的惩罚应该有一个梯度
+                # self.action_invalid_count += 1
+                # if self.action_invalid_count > 3:
+                #     self.reward = self.step_reward_for_invalid_action
+                # else:
+                #     self.reward = -0.1
             else:
                 self.action_invalid_count = 0
                 palce_x = sl.x if action.at_left else sl.x + sl.w - iw
@@ -372,15 +382,16 @@ class RectPackingEnv(gym.Env):
                 self.placements.append(placement)
                 self.remain_pieces.pop(action.piece_index)
                 self.UpdateSkylines(skyline_index, iw, ih, action.at_left)
-                self.reward -= len(self.skylines)
-                self.reward /= 10
+                # self.reward -= len(self.skylines)
+                # self.reward /= 10
         else:
             self.reward = self.step_reward_for_not_exist_action
         if not self.remain_pieces:  # find treasure
             area = np.array([sl.y for sl in self.skylines]).max() * self.strip_width
             self.use_radio = self.achieving_area_goal/area
             # self.reward = -(1 - self.use_radio) * 10
-            self.reward = self.use_radio * 100
+            self.reward = self.use_radio * self.reward_factor_for_achieving_goal
+            # self.reward = 100 / np.array([sl.y for sl in self.skylines]).max()
             self.done = True
         # self.render()
         return self.get_state_array(), self.reward, self.done, {'use_radio': self.use_radio}
@@ -408,16 +419,6 @@ class RectPackingEnv(gym.Env):
     #         raise ValueError("Action must be 0, 1, 2, or 3")
     #     return desired_new_state
 
-    # def location_to_state(self, location):
-    #     """Maps a (x, y) location to an integer that uniquely represents its position"""
-    #     return location[0] + location[1] * self.grid_height
-    #
-    # def state_to_location(self, state):
-    #     """Maps a state integer to the (x, y) grid point it represents"""
-    #     col = int(state / self.grid_height)
-    #     row = state - col*self.grid_height
-    #     return (row, col)
-    #
 
 
 if __name__ == '__main__':

@@ -16,10 +16,11 @@ class DQN(Base_Agent):
     def __init__(self, config):
         Base_Agent.__init__(self, config)
         self.memory = Replay_Buffer(self.hyperparameters["buffer_size"], self.hyperparameters["batch_size"], config.seed, self.device)
-        self.q_network_local = self.create_NN(input_dim=self.state_size, output_dim=self.action_size)
-        self.locally_load_policy()
-        self.q_network_optimizer = optim.Adam(self.q_network_local.parameters(),
-                                              lr=self.hyperparameters["learning_rate"], eps=1e-4)
+        if not hasattr(self, 'q_network_local'):
+            self.q_network_local = self.create_NN(input_dim=self.state_size, output_dim=self.action_size)
+            self.locally_load_policy()
+            self.q_network_optimizer = optim.Adam(self.q_network_local.parameters(),
+                                                  lr=self.hyperparameters["learning_rate"], eps=1e-4)
         self.exploration_strategy = Epsilon_Greedy_Exploration(config)
 
     def reset_game(self):
@@ -126,12 +127,15 @@ class DQN(Base_Agent):
         model_dir = os.path.dirname(self.model_path)
         if not os.path.exists(model_dir):
             os.mkdir(model_dir)
-        torch.save(self.q_network_local.state_dict(), self.model_path)
+        if hasattr(self, 'q_network_target'):
+            torch.save(self.q_network_target.state_dict(), self.model_path)
+        else:
+            torch.save(self.q_network_local.state_dict(), self.model_path)
 
     def locally_load_policy(self):
         """Loads the policy"""
         if os.path.exists(self.model_path):
-            print('load model')
+            print('load model', self.model_path)
             self.q_network_local.load_state_dict(torch.load(self.model_path))
 
     def time_for_q_network_to_learn(self):

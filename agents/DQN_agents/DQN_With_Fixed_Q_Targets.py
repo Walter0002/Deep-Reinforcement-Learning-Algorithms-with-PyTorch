@@ -8,8 +8,9 @@ class DQN_With_Fixed_Q_Targets(DQN):
     agent_name = "DQN with Fixed Q Targets"
     def __init__(self, config):
         DQN.__init__(self, config)
-        self.q_network_target = self.create_NN(input_dim=self.state_size, output_dim=self.action_size)
-        Base_Agent.copy_model_over(from_model=self.q_network_local, to_model=self.q_network_target)
+        if not hasattr(self, 'q_network_target'):
+            self.q_network_target = self.create_NN(input_dim=self.state_size, output_dim=self.action_size)
+            Base_Agent.copy_model_over(from_model=self.q_network_local, to_model=self.q_network_target)
 
     def learn(self, experiences=None):
         """Runs a learning iteration for the Q network"""
